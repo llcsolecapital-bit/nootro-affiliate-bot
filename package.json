@@ -5,12 +5,17 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "register": "node src/register-metadata.js"
   },
   "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cookie-session": "^2.1.1",
+    "crypto": "^1.0.1",
     "discord.js": "^14.14.1",
+    "dotenv": "^16.4.1",
+    "express": "^5.2.1",
     "googleapis": "^131.0.0",
-    "node-cron": "^3.0.3",
-    "dotenv": "^16.4.1"
+    "node-cron": "^3.0.3"
   }
 }

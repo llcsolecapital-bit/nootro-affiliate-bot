@@ -159,4 +159,8 @@ if (!process.env.DISCORD_TOKEN) {
   process.exit(1);
 }
 
+// Start the linked roles OAuth2 server
+const { startLinkedRolesServer } = require("./linked-roles");
+startLinkedRolesServer();
+
 client.login(process.env.DISCORD_TOKEN);
