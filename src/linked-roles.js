@@ -135,9 +135,13 @@ app.get("/discord-oauth-callback", async (req, res) => {
   }
 });
 
-// Health check
+// Health check (pinged by UptimeRobot to keep Railway alive)
+const startedAt = new Date();
 app.get("/", (req, res) => {
-  res.send("⚡ Nooty is running");
+  const uptime = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+  const hours = Math.floor(uptime / 3600);
+  const mins = Math.floor((uptime % 3600) / 60);
+  res.send(`⚡ Nooty is running | Uptime: ${hours}h ${mins}m | Started: ${startedAt.toISOString()}`);
 });
 
 // ─── Start Server ─────────────────────────────────────────────
