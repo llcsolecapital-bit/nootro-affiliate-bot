@@ -7,9 +7,18 @@ const {
   REST,
   Routes,
   PermissionFlagsBits,
+  EmbedBuilder,
 } = require("discord.js");
 const cron = require("node-cron");
 const { buildLeaderboardEmbed, buildNoDataEmbed } = require("./embed");
+const {
+  sendTicketPanel,
+  handleTicketOpen,
+  handleTicketCategory,
+  handleTicketClose,
+  handleTicketConfirmClose,
+  handleTicketCancelClose,
+} = require("./tickets");
 
 // ─── Data Provider Factory ────────────────────────────────────
 function getProvider() {
@@ -33,7 +42,7 @@ function getProvider() {
 
 // ─── Bot Setup ────────────────────────────────────────────────
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
 
 const provider = getProvider();
@@ -72,6 +81,33 @@ const commands = [
   new SlashCommandBuilder()
     .setName("leaderboard-refresh")
     .setDescription("Refresh data and post an updated leaderboard")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+  new SlashCommandBuilder()
+    .setName("nootysay")
+    .setDescription("Send a message as Nooty")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addStringOption((opt) =>
+      opt
+        .setName("message")
+        .setDescription("The message Nooty will send")
+        .setRequired(true)
+    )
+    .addChannelOption((opt) =>
+      opt
+        .setName("channel")
+        .setDescription("Channel to send in (defaults to current)")
+        .setRequired(false)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("ticket-panel")
+    .setDescription("Post the support ticket panel in this channel")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+  new SlashCommandBuilder()
+    .setName("set-welcome")
+    .setDescription("Set this channel as the welcome channel")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 ];
 
@@ -128,9 +164,36 @@ client.once("ready", async () => {
   console.log(`Daily leaderboard cron job scheduled for: ${schedule} (${process.env.TZ || "America/New_York"})`);
 });
 
+// ─── Interaction Handler ─────────────────────────────────────
 client.on("interactionCreate", async (interaction) => {
+
+  // ── Button Interactions (tickets) ──
+  if (interaction.isButton()) {
+    switch (interaction.customId) {
+      case "ticket_open":
+        return handleTicketOpen(interaction);
+      case "ticket_close":
+        return handleTicketClose(interaction);
+      case "ticket_confirm_close":
+        return handleTicketConfirmClose(interaction);
+      case "ticket_cancel_close":
+        return handleTicketCancelClose(interaction);
+    }
+    return;
+  }
+
+  // ── Select Menu Interactions (ticket category) ──
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === "ticket_category") {
+      return handleTicketCategory(interaction);
+    }
+    return;
+  }
+
+  // ── Slash Commands ──
   if (!interaction.isChatInputCommand()) return;
 
+  // Leaderboard commands
   if (
     interaction.commandName === "leaderboard" ||
     interaction.commandName === "leaderboard-refresh"
@@ -152,6 +215,98 @@ client.on("interactionCreate", async (interaction) => {
         content: `❌ Error fetching leaderboard data: ${error.message}`,
       });
     }
+  }
+
+  // Nooty Say command
+  if (interaction.commandName === "nootysay") {
+    const message = interaction.options.getString("message");
+    const targetChannel =
+      interaction.options.getChannel("channel") || interaction.channel;
+
+    try {
+      const nootyEmbed = new EmbedBuilder()
+        .setColor(0x00e5ff)
+        .setDescription(message)
+        .setFooter({ text: "⚡ Nooty" })
+        .setTimestamp();
+
+      await targetChannel.send({ embeds: [nootyEmbed] });
+
+      await interaction.reply({
+        content: `✅ Message sent to ${targetChannel}`,
+        flags: 64, // ephemeral — only you see this confirmation
+      });
+
+      console.log(
+        `[${new Date().toISOString()}] 📢 Nootysay by ${interaction.user.tag} in #${targetChannel.name}`
+      );
+    } catch (error) {
+      await interaction.reply({
+        content: `❌ Failed to send message: ${error.message}`,
+        flags: 64,
+      });
+    }
+  }
+
+  // Ticket Panel command
+  if (interaction.commandName === "ticket-panel") {
+    await sendTicketPanel(interaction.channel);
+    await interaction.reply({
+      content: "✅ Ticket panel posted!",
+      flags: 64,
+    });
+  }
+
+  // Set Welcome Channel command
+  if (interaction.commandName === "set-welcome") {
+    // Store the welcome channel ID in an env-like way
+    // Since we can't write to .env at runtime, we use a simple in-memory store
+    // that also checks the env var
+    client.welcomeChannelId = interaction.channel.id;
+
+    await interaction.reply({
+      content: `✅ Welcome channel set to ${interaction.channel}!\n\n` +
+        `**Note:** For this to persist across restarts, add this to your Railway env vars:\n` +
+        `\`WELCOME_CHANNEL_ID=${interaction.channel.id}\``,
+      flags: 64,
+    });
+
+    console.log(
+      `[${new Date().toISOString()}] 👋 Welcome channel set to #${interaction.channel.name} (${interaction.channel.id})`
+    );
+  }
+});
+
+// ─── Welcome New Members ─────────────────────────────────────
+client.on("guildMemberAdd", async (member) => {
+  const channelId = client.welcomeChannelId || process.env.WELCOME_CHANNEL_ID;
+  if (!channelId) return;
+
+  const channel = await member.guild.channels.fetch(channelId).catch(() => null);
+  if (!channel) return;
+
+  const welcomeEmbed = new EmbedBuilder()
+    .setColor(0x00e5ff)
+    .setTitle("⚡ Welcome to Nootro Energy!")
+    .setDescription(
+      `Hey ${member}, welcome to the squad! 🎉\n\n` +
+        `We're stoked to have you here. Here's how to get started:\n\n` +
+        `> 🏆 Check out the **affiliate leaderboard** to see top performers\n` +
+        `> 🎫 Need help? Open a **support ticket**\n` +
+        `> 💬 Introduce yourself and jump into the conversation!\n\n` +
+        `Let's get it. ⚡`
+    )
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: "Nootro Energy" })
+    .setTimestamp();
+
+  try {
+    await channel.send({ embeds: [welcomeEmbed] });
+    console.log(
+      `[${new Date().toISOString()}] 👋 Welcomed ${member.user.tag}`
+    );
+  } catch (error) {
+    console.error("Failed to send welcome message:", error.message);
   }
 });
 
