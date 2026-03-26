@@ -106,6 +106,8 @@ client.once("ready", async () => {
   cron.schedule(
     schedule,
     async () => {
+      console.log(`[${new Date().toISOString()}] ⏰ Cron job triggered!`);
+
       const channelId = process.env.LEADERBOARD_CHANNEL_ID;
       if (!channelId) {
         console.error("No LEADERBOARD_CHANNEL_ID set in .env");
@@ -123,7 +125,7 @@ client.once("ready", async () => {
     { timezone: process.env.TZ || "America/New_York" }
   );
 
-  console.log("Daily leaderboard cron job scheduled.");
+  console.log(`Daily leaderboard cron job scheduled for: ${schedule} (${process.env.TZ || "America/New_York"})`);
 });
 
 client.on("interactionCreate", async (interaction) => {
