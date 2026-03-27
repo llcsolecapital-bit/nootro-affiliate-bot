@@ -109,6 +109,11 @@ const commands = [
     .setName("set-welcome")
     .setDescription("Set this channel as the welcome channel")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+
+  new SlashCommandBuilder()
+    .setName("verify-panel")
+    .setDescription("Post the verification button in this channel")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 ];
 
 async function registerCommands() {
@@ -167,7 +172,7 @@ client.once("ready", async () => {
 // ─── Interaction Handler ─────────────────────────────────────
 client.on("interactionCreate", async (interaction) => {
 
-  // ── Button Interactions (tickets) ──
+  // ── Button Interactions (tickets + verify) ──
   if (interaction.isButton()) {
     switch (interaction.customId) {
       case "ticket_open":
@@ -178,6 +183,43 @@ client.on("interactionCreate", async (interaction) => {
         return handleTicketConfirmClose(interaction);
       case "ticket_cancel_close":
         return handleTicketCancelClose(interaction);
+      case "verify_role": {
+        const guild = interaction.guild;
+        const member = interaction.member;
+        const role = guild.roles.cache.find((r) => r.name === "Verified");
+
+        if (!role) {
+          return interaction.reply({
+            content: '❌ "Verified" role not found. Ask an admin to create it.',
+            flags: 64,
+          });
+        }
+
+        if (member.roles.cache.has(role.id)) {
+          return interaction.reply({
+            content: "You're already verified! ⚡",
+            flags: 64,
+          });
+        }
+
+        try {
+          await member.roles.add(role);
+          await interaction.reply({
+            content: "✅ You're verified! Welcome to the community. ⚡",
+            flags: 64,
+          });
+          console.log(
+            `[${new Date().toISOString()}] ✅ Verified ${member.user.tag}`
+          );
+        } catch (error) {
+          console.error("Failed to add verified role:", error.message);
+          await interaction.reply({
+            content: "❌ Failed to assign role. Ask an admin for help.",
+            flags: 64,
+          });
+        }
+        return;
+      }
     }
     return;
   }
@@ -274,6 +316,38 @@ client.on("interactionCreate", async (interaction) => {
     console.log(
       `[${new Date().toISOString()}] 👋 Welcome channel set to #${interaction.channel.name} (${interaction.channel.id})`
     );
+  }
+
+  // Verify Panel command
+  if (interaction.commandName === "verify-panel") {
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+
+    const verifyEmbed = new EmbedBuilder()
+      .setColor(0x00e5ff)
+      .setTitle("⚡ Verify to Enter")
+      .setDescription(
+        "Welcome to **Nootro Energy**!\n\n" +
+          "Click the button below to verify and unlock the server."
+      )
+      .setFooter({ text: "Nootro Energy" });
+
+    const verifyButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("verify_role")
+        .setLabel("Verify")
+        .setStyle(ButtonStyle.Success)
+        .setEmoji("✅")
+    );
+
+    await interaction.channel.send({
+      embeds: [verifyEmbed],
+      components: [verifyButton],
+    });
+
+    await interaction.reply({
+      content: "✅ Verify panel posted!",
+      flags: 64,
+    });
   }
 });
 
