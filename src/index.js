@@ -8,6 +8,10 @@ const {
   Routes,
   PermissionFlagsBits,
   EmbedBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
 } = require("discord.js");
 const cron = require("node-cron");
 const { buildLeaderboardEmbed, buildNoDataEmbed } = require("./embed");
@@ -87,12 +91,6 @@ const commands = [
     .setName("nootysay")
     .setDescription("Send a message as Nooty")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-    .addStringOption((opt) =>
-      opt
-        .setName("message")
-        .setDescription("The message Nooty will send")
-        .setRequired(true)
-    )
     .addChannelOption((opt) =>
       opt
         .setName("channel")
@@ -232,6 +230,41 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
+  // ── Modal Submit (nootysay) ──
+  if (interaction.isModalSubmit()) {
+    if (interaction.customId.startsWith("nootysay_modal_")) {
+      const channelId = interaction.customId.replace("nootysay_modal_", "");
+      const message = interaction.fields.getTextInputValue("nootysay_message");
+
+      try {
+        const targetChannel = await interaction.guild.channels.fetch(channelId);
+
+        const nootyEmbed = new EmbedBuilder()
+          .setColor(0x00e5ff)
+          .setDescription(message)
+          .setFooter({ text: "⚡ Nooty" })
+          .setTimestamp();
+
+        await targetChannel.send({ embeds: [nootyEmbed] });
+
+        await interaction.reply({
+          content: `✅ Message sent to ${targetChannel}`,
+          flags: 64,
+        });
+
+        console.log(
+          `[${new Date().toISOString()}] 📢 Nootysay by ${interaction.user.tag} in #${targetChannel.name}`
+        );
+      } catch (error) {
+        await interaction.reply({
+          content: `❌ Failed to send message: ${error.message}`,
+          flags: 64,
+        });
+      }
+    }
+    return;
+  }
+
   // ── Slash Commands ──
   if (!interaction.isChatInputCommand()) return;
 
@@ -259,35 +292,27 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // Nooty Say command
+  // Nooty Say command — opens modal for multi-line input
   if (interaction.commandName === "nootysay") {
-    const message = interaction.options.getString("message");
     const targetChannel =
       interaction.options.getChannel("channel") || interaction.channel;
 
-    try {
-      const nootyEmbed = new EmbedBuilder()
-        .setColor(0x00e5ff)
-        .setDescription(message)
-        .setFooter({ text: "⚡ Nooty" })
-        .setTimestamp();
+    // Store target channel for the modal submit handler
+    const modal = new ModalBuilder()
+      .setCustomId(`nootysay_modal_${targetChannel.id}`)
+      .setTitle("Send a message as Nooty");
 
-      await targetChannel.send({ embeds: [nootyEmbed] });
+    const messageInput = new TextInputBuilder()
+      .setCustomId("nootysay_message")
+      .setLabel("Message")
+      .setPlaceholder("Type your announcement here...")
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true)
+      .setMaxLength(4000);
 
-      await interaction.reply({
-        content: `✅ Message sent to ${targetChannel}`,
-        flags: 64, // ephemeral — only you see this confirmation
-      });
+    modal.addComponents(new ActionRowBuilder().addComponents(messageInput));
 
-      console.log(
-        `[${new Date().toISOString()}] 📢 Nootysay by ${interaction.user.tag} in #${targetChannel.name}`
-      );
-    } catch (error) {
-      await interaction.reply({
-        content: `❌ Failed to send message: ${error.message}`,
-        flags: 64,
-      });
-    }
+    await interaction.showModal(modal);
   }
 
   // Ticket Panel command
