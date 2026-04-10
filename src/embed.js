@@ -21,32 +21,21 @@ function formatNumber(num) {
  *
  * Layout per affiliate:
  *   🥇  @handle ∙ $3,140.00
- *   > 🛒 84 units sold  ∙  👁 12.4K views
  */
 function buildLeaderboardEmbed(data) {
   const { affiliates } = data;
 
-  // Build each affiliate block
-  const affiliateBlocks = affiliates.map((a, i) => {
+  // Build each affiliate line
+  const lines = affiliates.map((a, i) => {
     const rank = RANK_ICONS[i] || `**${i + 1}.**`;
     const gmv = formatGMV(a.gmv);
-    const units = formatNumber(a.unitsSold);
-    const views = formatNumber(a.views);
-
-    return [
-      `${rank}  **${a.handle}** ∙ ${gmv}`,
-      `> 🛒 ${units} units sold  ∙  👁 ${views} views`,
-    ].join("\n");
+    return `${rank}  **${a.handle}** ∙ ${gmv}`;
   });
 
   const embed = new EmbedBuilder()
     .setColor(0x00e5ff)
     .setTitle("⚡ Top 5 Affiliates")
-    .setDescription(
-      affiliateBlocks.map((block, i) =>
-        i < affiliateBlocks.length - 1 ? block + "\n" : block
-      ).join("\n")
-    )
+    .setDescription(lines.join("\n\n"))
     .setFooter({
       text: "Nootro Energy · TikTok Shop",
     })
